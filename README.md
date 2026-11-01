@@ -56,17 +56,41 @@ Se implementó una llamada al sistema que identifica las páginas de memoria que
 # Respuestas a las preguntas
 
 ## 1. Interpretación de vmprint()
+| Págins | Contenido | Permisos principales |
+|---|---|---|
+| Text | Instrucciones del programa ejecutable | PTE_R y PTE_X: permite leer y ejecutar, pero no escribir.|
+| Data | Variables globales y estáticas del programa| PTE_R y PTE_W: permite leer y escribir.|
+| Guard|Página ubicada debajo de la pila, para detectar desbordamientos.|El programa no puyede acceder a ella a través del modo usuario|
+| Stack | 	Variables locales, direcciones de retorno y datos de las funciones. |PTE_R, PTE_W y PTE_U: permite leer y escribir desde modo usuario.|
+| USYSCALL | Contiene información compartida del proceso, especialmente su PID.| PTE_R y PTE_U: el programa puede leerla, pero no modificarla.|
+| Trapframe | 	Guarda el contexto de ejecución del proceso durante las transiciones entre modo usuario y modo kernel.| No tiene PTE_U, ya que es una página reservada para uso del kernel. |
 ## 2. Página de guarda
+La página de guarda no tiene el bit de PTE_u, ya que su objetivo es impedir que un programa accceda a la memoria en la que se encuentra debajo de su pila.
+Si el programa intenta utilizar más espacio de la pila , terminará intentando acceder a la página de guarda.Como esta no permite el acceso desde modo usuario, se produce una excepción de memoria y el kernel puede finalizar el proceso.
 ## 3. Otras llamadas que se pueden acelerar
+Se podrían acelerar aquellas llamadas que consultan información del proceso que se mantiene disponible y que no requiere modificaciones constantes.
 ## 4. Riesgo de USYSCALL con PTE_W
-## 5. pgaccess() y páginas perezosas
+Si USYSCALL se mapeara con PTE_W, el programa tendría permiso para modificar su contenido desde modo usuario.
 
+Esto representaría un riesgo porque podría alterar información que debe ser administrada exclusivamente por el kernel, como el PID del proceso. Por ejemplo, un programa podría cambiar el valor de su PID almacenado en la página compartida y obtener información incorrecta al consultar ugetpid().
+## 5. pgaccess() y páginas perezosas
+sbrklazy() aumenta el tamaño lógico del espacio de direcciones del proceso, pero no asigna inmediatamente memoria física para las páginas solicitadas. La memoria se asigna de manera diferida (lazy allocation), únicamente cuando el programa intenta acceder a ella.
 ---
 
 # Resultados de las pruebas
-
-Resumen de `pgtbltest` y `usertests` (salida completa en `pruebas/`).
-
+* Salidas completas:
+  - pgtbltest.txt
+  - usertest.txt
+* E pgtbltest:
+  - Resultado: 11 de 11 pruebas aprobadas.
+  - Se verificó `ugetpid()` en procesos normales, hijos y después de `exec()`.
+  - Se comprobó la protección de solo lectura de USYSCALL.
+  - Se validaron la impresión de tablas de páginas (`vmprint`) y la detección de páginas accedidas (`pgaccess`).
+  - La revisión automática del formato de `vmprint()` también fue aprobada.
+* usertst -q
+  - Resultado: ALL TESTS PASSED.
+  - Se aprobaron las pruebas de memoria, procesos, archivos, asignación perezosa y manejo de páginas.
+  - No se produjo ningún kernel panic.
 ---
 
 # Decisiones de diseño
